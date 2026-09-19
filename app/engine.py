@@ -103,4 +103,17 @@ def snapshot(path):
         conn.row_factory = sqlite3.Row
         incidents = [dict(row) for row in conn.execute("SELECT * FROM incidents ORDER BY id DESC")]
         decisions = [dict(row) for row in conn.execute("SELECT decision,COUNT(*) AS count FROM events GROUP BY decision ORDER BY decision")]
-        return {"total_events":sum(row["count"] for row in decisions),"incidents":incidents,"decisions":decisions}
+        events = [dict(row) for row in conn.execute(
+            "SELECT event_id,circuit_id,event_type,received_at,decision,incident_id "
+            "FROM events ORDER BY received_at DESC,event_id DESC LIMIT 100"
+        )]
+        maintenance = [dict(row) for row in conn.execute(
+            "SELECT id,circuit_id,start,end,approved FROM maintenance ORDER BY start DESC,id DESC LIMIT 100"
+        )]
+        return {
+            "total_events": sum(row["count"] for row in decisions),
+            "incidents": incidents,
+            "decisions": decisions,
+            "events": events,
+            "maintenance": maintenance,
+        }
