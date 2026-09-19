@@ -66,6 +66,13 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(data["events"][0]["event_id"], "dashboard-test")
         self.assertEqual(len(data["incidents"]), 1)
 
+    def test_inventory_api_returns_mock_source(self):
+        status, _, body = self.get("/inventory")
+        data = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertIn("not live NetBox", data["source"])
+        self.assertEqual(len(data["circuits"]), 3)
+
     def test_static_path_not_exposed(self):
         with self.assertRaises(HTTPError) as caught:
             self.get("/app/engine.py")

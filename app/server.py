@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .engine import add_maintenance, init_db, snapshot, triage
+from .inventory import inventory_snapshot
 
 ROOT = Path(__file__).resolve().parent
 DB = os.environ.get("INCIDENT_DB", str(ROOT.parent / "incidents.db"))
@@ -45,6 +46,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, {"status": "ok"})
         if route == "/dashboard":
             return self.respond(200, snapshot(DB))
+        if route == "/inventory":
+            return self.respond(200, inventory_snapshot(DB))
         return self.respond(404, {"error": "not found"})
 
     def do_POST(self):
