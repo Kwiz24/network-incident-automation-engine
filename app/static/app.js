@@ -35,10 +35,24 @@ function render(data) {
   addText($("maintenance-matches"), number(sum((v) => v === "MAINTENANCE_MATCH")));
   addText($("escalated"), number(sum((v) => v.startsWith("ESCALATE_"))));
   addText($("incident-count"), `${incidents.length} incidents`);
+  const circuits = data.inventory?.circuits || [];
+  addText($("routed-open"), number(data.routing?.routed_open));
+  addText($("manual-review-open"), number(data.routing?.manual_review_open));
+  addText($("inventory-circuit-count"), number(circuits.length));
+  addText($("inventory-count"), `${circuits.length} circuits`);
+  renderRows("inventory-rows", circuits, 6, "No inventory available.", (row, item) => {
+    cell(row,item.circuit_id); cell(row,item.device_id); cell(row,item.interface_name);
+    cell(row,item.site); cell(row,item.provider); cell(row,item.owner_team);
+  });
   renderChart(decisions);
-  renderRows("incident-rows", incidents, 6, "No incidents yet. Send a simulated alert.", (row, item) => {
-    cell(row, `INC-${String(item.id).padStart(4, "0")}`); cell(row, item.circuit_id); cell(row, item.event_type);
-    badge(row, item.status.toUpperCase(), item.status === "open" ? "" : "muted"); cell(row, item.event_count); cell(row, utc(item.last_seen));
+  renderRows("incident-rows", incidents, 9, "No incidents yet. Send a simulated alert.", (row, item) => {
+    cell(row, `INC-${String(item.id).padStart(4, "0")}`); cell(row, item.circuit_id);
+    cell(row, item.device_id ? `${item.device_id} / ${item.site || "?"}` : "Unknown circuit");
+    cell(row, item.owner_team ? `${item.owner_team} / ${item.routing_status}` : "MANUAL REVIEW");
+    badge(row, item.priority || "P3", item.priority === "P1" ? "warning" : "muted");
+    cell(row, item.event_type);
+    badge(row, item.status.toUpperCase(), item.status === "open" ? "" : "muted");
+    cell(row, item.event_count); cell(row, utc(item.last_seen));
   });
   renderRows("event-rows", data.events || [], 4, "No processed events yet.", (row, item) => {
     cell(row, item.event_id); cell(row, item.circuit_id);
@@ -76,7 +90,7 @@ $("alert-form").addEventListener("submit", async (event) => {
     const response = await fetch("/alerts", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
     const json = await response.json(); if (!response.ok) throw new Error(json.error || `HTTP ${response.status}`);
     result.className = "result success";
-    result.textContent = `${json.decision} · Incident ${json.incident_id == null ? "not created" : `#${json.incident_id}`} · Maintenance: ${json.maintenance_match ? "yes" : "no"}`;
+    result.textContent = `${json.decision} · Incident ${json.incident_id == null ? "not created" : `#${json.incident_id}`} · Maintenance: ${json.maintenance_match ? "yes" : "no"} · Route: ${json.owner_team || "manual review"} · Related: ${(json.related_incident_ids || []).join(", ") || "none"}`;
     await refresh();
   } catch (err) { result.className = "result fail"; result.textContent = `Alert failed: ${err.message}`; }
   finally { button.disabled = false; }

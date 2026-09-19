@@ -1,152 +1,81 @@
-# Network Incident Automation Engine — Phase 2
+# Network Incident Automation Engine — Phase 3
 
-A **local-only portfolio demonstration** for infrastructure operations interviews. Python + SQLite + vanilla HTML/CSS/JavaScript; no third-party packages or Node.js installation. Includes alert deduplication, incident grouping by circuit and event type, approved maintenance matching, customer-impact escalation, and a browser dashboard.
+A **local-only educational network operations demo** for a systems administration interview. Python 3.9+, SQLite, HTML/CSS/JavaScript; no third-party dependencies, Cloudflare access, or live NetBox connection required.
 
-> **Safety:** Simulation only. No real network devices, ticketing systems, production maintenance-control integration, authentication, or real alert silences. The development API listens only on `127.0.0.1` and must not be exposed to the public internet.
+**Safety:** Mock inventory and incidents only. The API is unauthenticated, bound to `127.0.0.1`, and must never be exposed on a public interface. No real devices, ticketing, silences, or configuration are changed.
 
-## What the dashboard shows
+## What's new in Phase 3
 
-- Four metrics: processed unique events, open incidents, maintenance matches, and escalated events.
-- A decision-distribution bar chart of **stored** events (duplicate replays are not stored/counted).
-- Active incident table, recent event feed (latest 100), and maintenance table (latest 100).
-- A form to submit a simulated network event with a fresh unique ID and current UTC timestamp.
-- Automatic refresh every 15 seconds, plus a manual Refresh button and an API error state.
-- Responsive dark-mode styling; no third-party assets or external requests.
+- Bundled NetBox-style mock network inventory (`samples/inventory.json`): devices, sites, circuit-to-device/interface mappings, providers, and owning teams.
+- Input enrichment: known circuit alerts receive device, site, interface, owner, and routing status.
+- Unknown circuits remain **MANUAL_REVIEW** with **no invented owner**.
+- Impact-driven incident priorities (P1 for customer impact; P2 for link/port/BGP failures; P3 for other events), including upgrading existing incidents on escalation.
+- Related open incidents on the same device are shown as **context only**; incidents on different circuits are **not automatically merged**.
+- A new `GET /inventory` endpoint, routing metrics, owner/priority columns, and inventory table in the dashboard.
+- Backward-compatible SQLite migration for Phase 1/2 `incidents.db`; existing incident IDs and event records are preserved.
+- Additional unit and HTTP tests.
 
-## Quick start on a MacBook Pro with VS Code
+## macOS + VS Code quick start
 
-1. Extract the ZIP, open the `network-incident-automation-engine` folder in VS Code, and open **Terminal → New Terminal**.
-2. Confirm Python 3.9+ and run tests:
+1. Open the repository root in VS Code, then Terminal → New Terminal.
+2. Confirm `python3 --version` is 3.9+.
+3. Run `python3 -m unittest discover -s tests -v`.
+4. Run `python3 -m app.server`.
+5. Visit **http://127.0.0.1:8080/** in Firefox; keep the Python server running.
+6. Stop the server with **Control+C**.
 
-```bash
-python3 --version
-python3 -m unittest discover -s tests -v
-```
+A local `incidents.db` is created automatically and excluded by `.gitignore`. Back it up before any merge or upgrade.
 
-3. Start the local application:
+## Demo walkthrough
 
-```bash
-python3 -m app.server
-```
+1. Send a `LINK_DOWN` event with circuit `circuit-42`: mapped to `edge-dfw-01`, interface `et-0/0/1`, Backbone Operations, P2.
+2. Send a different event ID for `circuit-43`: new incident; shared-device incident appears as related context in the API response.
+3. Send an alert for `unknown-circuit`: incident enters **MANUAL_REVIEW**, owner remains empty.
+4. Tick *Customer-impacting event* and send a new alert for `circuit-42`: priority upgrades to P1 and decision is escalated.
+5. Inspect routing metrics, incident ownership, and the inventory table. Refresh is automatic every 15 seconds.
 
-4. Open **http://127.0.0.1:8080/** in your browser. Press **Send simulated alert**, then view the updated metric cards, decision chart, and incident/event tables.
-
-5. Submit another alert with the same circuit and event type to demonstrate `UPDATED_INCIDENT`. Tick **Customer-impacting event** and send another alert to demonstrate escalation. The event IDs are generated uniquely, so they are not delivery duplicates.
-
-**Stop the server:** `Ctrl+C` in the VS Code terminal. **Reset demo data:** stop the server, delete `incidents.db` in the project folder, then start the server again. This deletes only the local demo data.
-
-### Optional: reproduce exact duplicate delivery
-
-Open a second VS Code terminal while the server runs:
+API examples (in a second terminal):
 
 ```bash
-curl -X POST http://127.0.0.1:8080/alerts -H 'Content-Type: application/json' --data-binary @samples/alert.json
-curl -X POST http://127.0.0.1:8080/alerts -H 'Content-Type: application/json' --data-binary @samples/alert.json
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/inventory
+curl http://127.0.0.1:8080/dashboard
+curl -X POST http://127.0.0.1:8080/alerts \
+  -H 'Content-Type: application/json' \
+  -d '{"event_id":"demo-unique-101","circuit_id":"circuit-42","event_type":"LINK_DOWN","timestamp":"2026-09-19T17:00:00Z","customer_impact":false}'
 ```
 
-The second request returns `DUPLICATE_EVENT`; the count of stored events does **not** increase. The supplied sample event has a fixed historical timestamp, so it sorts according to its actual timestamp rather than necessarily appearing first in the recent-event table.
-
-### Optional: demonstrate an approved maintenance match
-
-Register a sample window first, then submit a fresh alert whose timestamp falls inside it:
-
-```bash
-curl -X POST http://127.0.0.1:8080/maintenance -H 'Content-Type: application/json' --data-binary @samples/maintenance.json
-curl -X POST http://127.0.0.1:8080/alerts -H 'Content-Type: application/json' -d '{"event_id":"sample-maintenance-1","circuit_id":"circuit-42","event_type":"LINK_DOWN","timestamp":"2026-09-19T14:05:00Z","customer_impact":false}'
-```
-
-A matching event returns `MAINTENANCE_MATCH`, appears in the feed, and increases the maintenance-match metric. The dashboard's **Send simulated alert** button uses current UTC time; it will match this sample maintenance only if the current time is inside the defined window. An event with `customer_impact: true` still escalates even when maintenance matches.
-
-## API reference
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/` | Browser dashboard |
-| GET | `/styles.css`, `/app.js` | Dashboard assets |
-| GET | `/health` | Health status |
-| GET | `/dashboard` | Aggregate counts, all incidents, latest 100 recorded events and maintenance windows |
-| POST | `/alerts` | Validate, deduplicate, correlate, triage and store an alert |
-| POST | `/maintenance` | Add a validated maintenance window |
-
-The dashboard is read-only except for its simulated alert submission form. Maintenance records are added through the API. Dashboard metrics are lifetime counts of the local demo database, not live network metrics. Incidents do not have a resolve/close workflow yet.
-
-## Folder structure
-
-```text
-app/
-  engine.py            SQLite persistence and triage engine
-  server.py            Python HTTP API + safe static route allowlist
-  static/
-    index.html         Dashboard layout
-    styles.css         Responsive dark interface
-    app.js             Fetch, visualization, local simulator
-samples/               Sample alert and maintenance payloads
-tests/                 Engine and HTTP smoke tests
-.gitignore             Excludes local SQLite databases
-```
+Use a **new event ID** for each test. The example's fixed timestamp is for a reproducible sample; dashboard submissions use the current UTC timestamp. To view live maintenance behavior, register an approved window spanning the event timestamp using `POST /maintenance` with circuit ID, `start`, `end`, and `approved`.
 
 ## Architecture
 
 ```text
-Browser (http://127.0.0.1:8080/)
-  |-- GET /dashboard --------------------> Python HTTP server
-  |-- POST /alerts (simulation) --------> Python HTTP server
-                                          |
-                                          v
-                                    Triage engine
-                             deduplicate / correlate /
-                             check maintenance / escalate
-                                          |
-                                          v
-                                       SQLite
+Browser dashboard ──GET /dashboard,/inventory──> Python HTTP API
+Browser simulator ──POST /alerts───────────────> SQLite triage engine
+                                                   ├─ deduplicate by event_id
+                                                   ├─ check maintenance
+                                                   ├─ look up mock inventory
+                                                   ├─ create/update incident
+                                                   └─ assign priority/owner or manual review
+Bundled mock JSON ──seed only on new DB────────> SQLite inventory tables
 ```
 
-## Interview demo (2 minutes)
+**Routing is a decision label inside the local database, not a notification or production ticket dispatch.** The prototype is deliberately conservative: maintenance matching does not silence real alerts; shared-device context does not prove shared root cause; priority uses simplified demo rules.
 
-1. Explain the issue: repetitive interface and backbone tickets cost engineering time.
-2. Open the dashboard and show the current baseline metrics.
-3. Submit a LINK_DOWN alert to create an incident; submit another alert for the same circuit to show correlation.
-4. Mark the next alert customer-impacting to show escalation.
-5. Use identical `curl` requests to prove duplicate delivery is idempotent. Show the decision chart, event audit feed, and tests.
-6. Explain the safeguards required before production: validated network inventory, incident expiry/resolution, secure APIs, durable queues, operator-approved remediation, audit logs, and accurate suppression rules.
+## Database and safe upgrades
 
-## Running tests
+`init_db` uses `CREATE TABLE IF NOT EXISTS`, checks existing incident columns, adds Phase 3 fields where absent, seeds mock inventory only if there are no devices yet, and backfills old incidents with known circuit ownership. It does **not** delete incidents or their IDs. On real deployments, use versioned database migrations, backups, transactions, and monitoring rather than this simplified schema initializer.
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+To reset only an intentionally disposable demo, stop the server and rename `incidents.db` to `incidents.db.backup` before restarting. Do not delete an existing database unless you deliberately want to discard local history.
 
-The HTTP smoke tests use a temporary database and a random loopback port; they do not modify your normal `incidents.db` data.
+## Limitations / potential Phase 4
 
-## GitHub: existing repository or first publish
+- Not authenticated; local only. No real NetBox API, NOC tooling, message queues, or vendor maintenance ingestion.
+- Bundled inventory is demo data seeded once, not a live synchronization service. Editing the JSON does not update an existing database automatically.
+- Correlation is by circuit + event type for existing open incidents. Same-device incidents are only associated in response context.
+- No retries, persistent outbound ticket delivery, topology-based root-cause inference, automatic remediation, incident closing UI, or deployment hardening.
+- For production: typed alert schemas, API auth, data freshness/ownership validation, audit logs, queue/retry guarantees, transactional outbox, formal change approvals, and tested failover.
 
-If you already cloned a Git repository locally, **do not run `git init` again unnecessarily or replace its `.git` folder.** Copy the updated `app/`, `tests/`, and `README.md` into that repository; keep your existing `.git` folder and any work you added. Then:
+## Git workflow for an existing Phase 2 repository
 
-```bash
-git status
-git add app tests README.md
-git commit -m "Add incident operations dashboard"
-git push
-```
-
-If this is your *first* publish, create an empty repository in the `Kwiz24` GitHub account, then from the project root:
-
-```bash
-git init
-git add .
-git commit -m "Build network incident automation engine dashboard"
-git branch -M main
-git remote add origin https://github.com/Kwiz24/network-incident-automation-engine.git
-git push -u origin main
-```
-
-Verify the destination with `git remote -v` before pushing. Never commit secrets, local incident databases, or real company telemetry.
-
-## Design limitations / Phase 3
-
-- Correlation only matches open incidents with the same circuit ID and event type; it does not use network topology or time-windowed clusters.
-- Existing incidents remain `open` indefinitely: there is no resolution API, lifecycle, or TTL.
-- Approved maintenance is matched against **event time** and circuit ID, not notification ingestion time or an authoritative operational change system.
-- `customer_impact` is provided by untrusted simulated input; genuine impact would need independent telemetry and verification.
-- The UI renders server-provided text with `textContent` rather than injecting HTML, and the Python server only serves a fixed list of local static assets.
-- Next: inventory enrichment via NetBox, meaningful alert correlation windows, alert delivery metrics, tests for race conditions, structured logging, secure API access, and safe human-approved remediation.
+**Do not extract a new ZIP into the repository and do not copy `.git` or `incidents.db`.** Confirm `pwd` and `git status` first. Commit or back up any uncommitted work. Switch to up-to-date main and create a new feature branch. Preview the copy with `rsync -avn` before using `rsync -av`; verify tests and browser output before committing. See the conversation walkthrough for exact commands.

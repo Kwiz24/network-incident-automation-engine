@@ -1,0 +1,45 @@
+{
+  "devices": [
+    {
+      "device_id": "edge-dfw-01",
+      "site": "DFW-01",
+      "role": "edge-router",
+      "owner_team": "Backbone Operations"
+    },
+    {
+      "device_id": "edge-dfw-02",
+      "site": "DFW-01",
+      "role": "edge-router",
+      "owner_team": "Backbone Operations"
+    },
+    {
+      "device_id": "core-iad-01",
+      "site": "IAD-01",
+      "role": "core-router",
+      "owner_team": "Core Network Operations"
+    }
+  ],
+  "circuits": [
+    {
+      "circuit_id": "circuit-42",
+      "device_id": "edge-dfw-01",
+      "interface_name": "et-0/0/1",
+      "provider": "Example Transit A",
+      "owner_team": "Backbone Operations"
+    },
+    {
+      "circuit_id": "circuit-43",
+      "device_id": "edge-dfw-01",
+      "interface_name": "et-0/0/2",
+      "provider": "Example Transit B",
+      "owner_team": "Backbone Operations"
+    },
+    {
+      "circuit_id": "circuit-77",
+      "device_id": "core-iad-01",
+      "interface_name": "et-1/0/1",
+      "provider": "Example Backbone C",
+      "owner_team": "Core Network Operations"
+    }
+  ]
+}
