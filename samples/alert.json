@@ -1,0 +1,7 @@
+{
+  "event_id": "event-1001",
+  "circuit_id": "circuit-42",
+  "event_type": "LINK_DOWN",
+  "timestamp": "2026-09-19T14:00:00Z",
+  "customer_impact": false
+}
